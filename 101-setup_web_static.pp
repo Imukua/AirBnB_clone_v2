@@ -1,44 +1,91 @@
-# Ensure Nginx is installed
-package { 'nginx':
-  ensure => 'installed',
-}
+# Configures a web server for deployment of web_static.
 
-# Create the necessary directories and index.html file
-file { ['/data/web_static/releases/test/', '/data/web_static/shared/']:
-  ensure => 'directory',
-}
+# Nginx configuration file
+$nginx_config = "server {
+    listen 80 default_server;
+    listen [::]:80 default_server;
+    add_header X-Served-By ${hostname};
+    root   /var/www/html;
+    index  index.html index.htm;
+
+    location /hbnb_static {
+        alias /data/web_static/current;
+        index index.html index.htm;
+    }
+
+    location /redirect_me {
+        return 301 https://github.com/Imukua;
+    }
+
+    error_page 404 /404.html;
+    location /404 {
+      root /var/www/html;
+      internal;
+    }
+}"
+
+package { 'nginx':
+  ensure   => 'present',
+  provider => 'apt'
+} ->
+
+file { '/data':
+  ensure  => 'directory'
+} ->
+
+file { '/data/web_static':
+  ensure => 'directory'
+} ->
+
+file { '/data/web_static/releases':
+  ensure => 'directory'
+} ->
+
+file { '/data/web_static/releases/test':
+  ensure => 'directory'
+} ->
+
+file { '/data/web_static/shared':
+  ensure => 'directory'
+} ->
 
 file { '/data/web_static/releases/test/index.html':
-  ensure  => 'file',
-  content => 'Alx-school Rocks',
-}
+  ensure  => 'present',
+  content => "Holberton School Puppet\n"
+} ->
 
-# Create a symbolic link
 file { '/data/web_static/current':
-  ensure  => 'link',
-  target  => '/data/web_static/releases/test/',
-  force   => true,
-  require => File['/data/web_static/releases/test/'],
+  ensure => 'link',
+  target => '/data/web_static/releases/test'
+} ->
+
+exec { 'chown -R ubuntu:ubuntu /data/':
+  path => '/usr/bin/:/usr/local/bin/:/bin/'
 }
 
-# Set ownership
-file { '/data/':
-  ensure  => 'directory',
-  owner   => 'ubuntu',
-  group   => 'ubuntu',
-  recurse => true,
-}
+file { '/var/www':
+  ensure => 'directory'
+} ->
 
-# Configure Nginx
+file { '/var/www/html':
+  ensure => 'directory'
+} ->
+
+file { '/var/www/html/index.html':
+  ensure  => 'present',
+  content => "Alx-school Rocks\n"
+} ->
+
+file { '/var/www/html/404.html':
+  ensure  => 'present',
+  content => "Ceci n'est pas une page\n"
+} ->
+
 file { '/etc/nginx/sites-available/default':
-  ensure  => 'file',
-  content => template('your_module/default_nginx_config.erb'),
-  require => Package['nginx'],
-  notify  => Service['nginx'],
-}
+  ensure  => 'present',
+  content => $nginx_config
+} ->
 
-# Define Nginx service
-service { 'nginx':
-  ensure => 'running',
-  enable => true,
+exec { 'nginx restart':
+  path => '/etc/init.d/'
 }
